@@ -3,7 +3,7 @@
 [![codecov](https://codecov.io/gh/czasg/go-env/branch/main/graph/badge.svg?token=OkiSH6DMqf)](https://codecov.io/gh/czasg/go-env)
 [![GitHub Stars](https://img.shields.io/github/stars/czasg/go-env.svg?style=flat-square&label=Stars&logo=github)](https://github.com/czasg/go-env/stargazers)
 
-## env.Parse
+## Env Parse
 ```go
 package main
 

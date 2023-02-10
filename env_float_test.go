@@ -45,7 +45,7 @@ func TestFloatParse(t *testing.T) {
 	}
 	{
 		test := TestFloatParseEmpty{}
-		err := ParseWithOpt(&test)
+		err := ParseEntity(Entity{Value: &test})
 		assert("TestFloatParse", test.A, float32(0))
 		assert("TestFloatParse", test.B, float64(0))
 		assert("TestFloatParse", err, nil)

@@ -11,11 +11,21 @@ import (
 
 type Opt int
 
+func (o Opt) Enable(opt Opt) bool {
+	return o&opt == opt
+}
+
 const (
 	OptEnv Opt = 1 << iota
 	OptDefault
 	OptSilent // ignore err and iterate over all fields.
 )
+
+type Entity struct {
+	Value  interface{}
+	Prefix string
+	Opt    Opt
+}
 
 type Payload struct {
 	Value       reflect.Value
@@ -25,75 +35,72 @@ type Payload struct {
 	StructField reflect.StructField
 }
 
-var (
-	NotPointerStructErr = errors.New("only supported pointer to `struct`")
-)
+var NotPointerStructErr = errors.New("only supported pointer to `struct`")
 
 func Parse(v interface{}) error {
-	return ParseWithOpt(v, OptEnv, OptDefault)
+	return ParseEntity(Entity{
+		Value: v,
+		Opt:   OptEnv | OptDefault,
+	})
 }
 
-func ParseWithOpt(v interface{}, opts ...Opt) error {
-	ind := reflect.Indirect(reflect.ValueOf(v))
-	if reflect.ValueOf(v).Kind() != reflect.Ptr || ind.Kind() != reflect.Struct {
+func ParseEntity(e Entity) error {
+	ind := reflect.Indirect(reflect.ValueOf(e.Value))
+	if reflect.ValueOf(e.Value).Kind() != reflect.Ptr || ind.Kind() != reflect.Struct {
 		return NotPointerStructErr
 	}
-	var opt Opt = 0
-	for _, o := range opts {
-		opt = opt | o
-	}
-	return parse(Payload{Value: ind, Opt: opt})
+	return parse(Payload{Value: ind, Prefix: e.Prefix, Opt: e.Opt})
 }
 
-func parse(payload Payload) error {
-	for i := 0; i < payload.Value.NumField(); i++ {
-		payload.Field = payload.Value.Field(i)
-		payload.StructField = payload.Value.Type().Field(i)
-		err := parseField(payload)
-		if err != nil && payload.Opt&OptSilent != OptSilent {
+func parse(p Payload) error {
+	for i := 0; i < p.Value.NumField(); i++ {
+		p.Field = p.Value.Field(i)
+		p.StructField = p.Value.Type().Field(i)
+		err := parseField(p)
+		if err != nil && !p.Opt.Enable(OptSilent) {
 			return err
 		}
 	}
 	return nil
 }
 
-func parseField(payload Payload) error {
-	switch payload.Field.Kind() {
+func parseField(p Payload) error {
+	switch p.Field.Kind() {
 	case reflect.Ptr:
-		return parsePtr(payload)
+		return parsePtr(p)
 	case reflect.Struct:
-		return parseStruct(payload)
+		return parseStruct(p)
 	case reflect.String:
-		return parseString(payload)
+		return parseString(p)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return parseInt(payload)
+		return parseInt(p)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return parseUint(payload)
+		return parseUint(p)
 	case reflect.Float32, reflect.Float64:
-		return parseFloat(payload)
+		return parseFloat(p)
 	case reflect.Chan:
-		return parseChan(payload)
+		return parseChan(p)
 	case reflect.Map:
-		return parseMap(payload)
+		return parseMap(p)
 	case reflect.Slice:
-		return parseSlice(payload)
+		return parseSlice(p)
 	case reflect.Array:
-		return parseArray(payload)
+		return parseArray(p)
 	case reflect.Bool:
-		return parseBool(payload)
+		return parseBool(p)
 	default:
-		return fmt.Errorf("unsupport field [%s] kind [%v]", payload.StructField.Name, payload.Field.Kind())
+		return fmt.Errorf("unsupport field [%s] kind [%v]", p.StructField.Name, p.Field.Kind())
 	}
 }
 
-func parseValue(payload Payload) (string, error) {
+func parseValue(p Payload) (string, error) {
 	var value string
-	if payload.Opt&OptEnv == OptEnv {
-		envName := strings.ToUpper(payload.StructField.Name)
+	if p.Opt.Enable(OptEnv) {
+		envName := strings.ToUpper(p.StructField.Name)
 		envDefault := ""
 		envRequire := false
 		sep := "_"
-		envStr, exist := payload.StructField.Tag.Lookup("env")
+		envStr, exist := p.StructField.Tag.Lookup("env")
 		if exist {
 			for index, str := range strings.Split(envStr, ",") {
 				if index == 0 && str != "" {
@@ -109,11 +116,11 @@ func parseValue(payload Payload) (string, error) {
 				}
 			}
 		}
-		if payload.Prefix != "" {
+		if p.Prefix != "" {
 			if envName == "" {
-				envName = payload.Prefix
+				envName = p.Prefix
 			} else {
-				envName = fmt.Sprintf("%s%s%s", payload.Prefix, sep, envName)
+				envName = fmt.Sprintf("%s%s%s", p.Prefix, sep, envName)
 			}
 		}
 		envValue, exist := os.LookupEnv(envName)
@@ -125,20 +132,20 @@ func parseValue(payload Payload) (string, error) {
 		}
 		value = envValue
 	}
-	if value == "" && payload.Opt&OptDefault == OptDefault {
-		value = payload.StructField.Tag.Get("default")
+	if value == "" && p.Opt.Enable(OptDefault) {
+		value = p.StructField.Tag.Get("default")
 	}
 	return value, nil
 }
 
-func parsePtr(payload Payload) error {
+func parsePtr(p Payload) error {
 	defer func() {
 		if err := recover(); err != nil {
 		}
 	}()
-	if payload.Field.IsNil() {
-		field := reflect.New(payload.Field.Type().Elem())
-		payload.Field.Set(field)
+	if p.Field.IsNil() {
+		field := reflect.New(p.Field.Type().Elem())
+		p.Field.Set(field)
 		return nil
 	}
 	return nil
@@ -147,11 +154,11 @@ func parsePtr(payload Payload) error {
 /*
 `env:"field,sep=_,default=df,require,empty"`
 */
-func parseStruct(payload Payload) error {
-	payload.Value = payload.Field
-	fieldName := strings.ToUpper(payload.StructField.Name)
+func parseStruct(p Payload) error {
+	p.Value = p.Field
+	fieldName := strings.ToUpper(p.StructField.Name)
 	sep := "_"
-	envStr, exist := payload.StructField.Tag.Lookup("env")
+	envStr, exist := p.StructField.Tag.Lookup("env")
 	if exist {
 		for index, str := range strings.Split(envStr, ",") {
 			if index == 0 && str != "" {
@@ -163,37 +170,37 @@ func parseStruct(payload Payload) error {
 			}
 		}
 	}
-	if payload.Prefix == "" {
-		payload.Prefix = fieldName
-		return parse(payload)
+	if p.Prefix == "" {
+		p.Prefix = fieldName
+		return parse(p)
 	}
 	if fieldName == "" {
-		return parse(payload)
+		return parse(p)
 	}
-	payload.Prefix = fmt.Sprintf("%s%s%s", payload.Prefix, sep, fieldName)
-	return parse(payload)
+	p.Prefix = fmt.Sprintf("%s%s%s", p.Prefix, sep, fieldName)
+	return parse(p)
 }
 
-func parseString(payload Payload) error {
-	if payload.Field.String() != "" {
+func parseString(p Payload) error {
+	if p.Field.String() != "" {
 		return nil
 	}
-	value, err := parseValue(payload)
+	value, err := parseValue(p)
 	if err != nil {
 		return err
 	}
 	if value == "" {
 		return nil
 	}
-	payload.Field.SetString(value)
+	p.Field.SetString(value)
 	return nil
 }
 
-func parseInt(payload Payload) error {
-	if payload.Field.Int() != 0 {
+func parseInt(p Payload) error {
+	if p.Field.Int() != 0 {
 		return nil
 	}
-	value, err := parseValue(payload)
+	value, err := parseValue(p)
 	if err != nil {
 		return err
 	}
@@ -202,17 +209,17 @@ func parseInt(payload Payload) error {
 	}
 	iv, err := strconv.Atoi(value)
 	if err != nil {
-		return fmt.Errorf("%s invalid [%s]", payload.StructField.Name, value)
+		return fmt.Errorf("%s invalid [%s]", p.StructField.Name, value)
 	}
-	payload.Field.SetInt(int64(iv))
+	p.Field.SetInt(int64(iv))
 	return nil
 }
 
-func parseUint(payload Payload) error {
-	if payload.Field.Uint() != 0 {
+func parseUint(p Payload) error {
+	if p.Field.Uint() != 0 {
 		return nil
 	}
-	value, err := parseValue(payload)
+	value, err := parseValue(p)
 	if err != nil {
 		return err
 	}
@@ -221,17 +228,17 @@ func parseUint(payload Payload) error {
 	}
 	iv, err := strconv.ParseUint(value, 0, 64)
 	if err != nil {
-		return fmt.Errorf("%s invalid [%s]", payload.StructField.Name, value)
+		return fmt.Errorf("%s invalid [%s]", p.StructField.Name, value)
 	}
-	payload.Field.SetUint(iv)
+	p.Field.SetUint(iv)
 	return nil
 }
 
-func parseFloat(payload Payload) error {
-	if payload.Field.Float() != 0 {
+func parseFloat(p Payload) error {
+	if p.Field.Float() != 0 {
 		return nil
 	}
-	value, err := parseValue(payload)
+	value, err := parseValue(p)
 	if err != nil {
 		return err
 	}
@@ -240,37 +247,37 @@ func parseFloat(payload Payload) error {
 	}
 	iv, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		return fmt.Errorf("%s invalid [%s]", payload.StructField.Name, value)
+		return fmt.Errorf("%s invalid [%s]", p.StructField.Name, value)
 	}
-	payload.Field.SetFloat(iv)
+	p.Field.SetFloat(iv)
 	return nil
 }
 
-func parseChan(payload Payload) error {
-	if payload.Field.IsNil() {
-		payload.Field.Set(reflect.MakeChan(payload.Field.Type(), 0))
+func parseChan(p Payload) error {
+	if p.Field.IsNil() {
+		p.Field.Set(reflect.MakeChan(p.Field.Type(), 0))
 	}
 	return nil
 }
 
-func parseMap(payload Payload) error {
+func parseMap(p Payload) error {
 	defer func() {
 		if err := recover(); err != nil {
 		}
 	}()
-	if payload.Field.IsNil() {
-		payload.Field.Set(reflect.MakeMap(payload.Field.Type()))
+	if p.Field.IsNil() {
+		p.Field.Set(reflect.MakeMap(p.Field.Type()))
 	}
 	return nil
 }
 
-func parseSlice(payload Payload) error {
+func parseSlice(p Payload) error {
 	defer func() {
 		if err := recover(); err != nil {
 		}
 	}()
-	if payload.Field.IsNil() {
-		payload.Field.Set(reflect.MakeSlice(payload.Field.Type(), 0, 0))
+	if p.Field.IsNil() {
+		p.Field.Set(reflect.MakeSlice(p.Field.Type(), 0, 0))
 	}
 	return nil
 }
@@ -279,11 +286,11 @@ func parseArray(_ Payload) error {
 	return nil
 }
 
-func parseBool(payload Payload) error {
-	if payload.Field.Bool() {
+func parseBool(p Payload) error {
+	if p.Field.Bool() {
 		return nil
 	}
-	value, err := parseValue(payload)
+	value, err := parseValue(p)
 	if err != nil {
 		return err
 	}
@@ -291,6 +298,6 @@ func parseBool(payload Payload) error {
 		return nil
 	}
 	b, _ := strconv.ParseBool(value)
-	payload.Field.SetBool(b)
+	p.Field.SetBool(b)
 	return nil
 }

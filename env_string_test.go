@@ -39,13 +39,13 @@ func TestStringParse(t *testing.T) {
 	}
 	{
 		test := TestStringParseDefault{}
-		err := ParseWithOpt(&test, OptDefault)
+		err := ParseEntity(Entity{Value: &test, Opt: OptDefault})
 		assert("TestStringParse", test.A, "test")
 		assert("TestStringParse", err, nil)
 	}
 	{
 		test := TestStringParseEmpty{}
-		err := ParseWithOpt(&test)
+		err := ParseEntity(Entity{Value: &test})
 		assert("TestStringParse", test.A, "")
 		assert("TestStringParse", err, nil)
 	}

@@ -57,7 +57,7 @@ func TestIntParse(t *testing.T) {
 	}
 	{
 		test := TestIntParseDefault{}
-		err := ParseWithOpt(&test, OptDefault)
+		err := ParseEntity(Entity{Value: &test, Opt: OptDefault})
 		assert("TestIntParse", test.A, 1)
 		assert("TestIntParse", test.B, int8(1))
 		assert("TestIntParse", test.C, int16(1))
@@ -67,7 +67,7 @@ func TestIntParse(t *testing.T) {
 	}
 	{
 		test := TestIntParseEmpty{}
-		err := ParseWithOpt(&test)
+		err := ParseEntity(Entity{Value: &test})
 		assert("TestIntParse", test.A, 0)
 		assert("TestIntParse", test.B, int8(0))
 		assert("TestIntParse", test.C, int16(0))

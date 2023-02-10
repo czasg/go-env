@@ -58,7 +58,7 @@ func TestUintParse(t *testing.T) {
 	}
 	{
 		test := TestUintParseDefault{}
-		err := ParseWithOpt(&test, OptDefault)
+		err := ParseEntity(Entity{Value: &test, Opt: OptDefault})
 		assert("TestUintParse", test.A, uint(1))
 		assert("TestUintParse", test.B, uint8(1))
 		assert("TestUintParse", test.C, uint16(1))
@@ -68,7 +68,7 @@ func TestUintParse(t *testing.T) {
 	}
 	{
 		test := TestUintParseEmpty{}
-		err := ParseWithOpt(&test)
+		err := ParseEntity(Entity{Value: &test})
 		assert("TestUintParse", test.A, uint(0))
 		assert("TestUintParse", test.B, uint8(0))
 		assert("TestUintParse", test.C, uint16(0))

@@ -8,7 +8,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/czasg/go-env"
 	"os"
 )
@@ -26,11 +25,6 @@ type Postgres struct {
 }
 
 func main() {
-	_ = os.Setenv("ENV", "test")
-	_ = os.Setenv("POSTGRES_ADDR", "localhost:5432")
-	_ = os.Setenv("POSTGRES_USER", "postgres")
-	_ = os.Setenv("POSTGRES_PASSWORD", "postgres")
-	_ = os.Setenv("POSTGRES_DATABASE", "postgres")
 	cfg := Config{}
 	err := env.Parse(&cfg)
 	if err != nil {
@@ -42,6 +36,14 @@ func main() {
 	if cfg.Postgres.User != "postgres" {
 		panic("fail")
 	}
+}
+
+func init() {
+	_ = os.Setenv("ENV", "test")
+	_ = os.Setenv("POSTGRES_ADDR", "localhost:5432")
+	_ = os.Setenv("POSTGRES_USER", "postgres")
+	_ = os.Setenv("POSTGRES_PASSWORD", "postgres")
+	_ = os.Setenv("POSTGRES_DATABASE", "postgres")
 }
 ```
 
@@ -58,7 +60,6 @@ func main() {
 package main
 
 import (
-	"fmt"
 	"github.com/czasg/go-env"
 	"os"
 )
@@ -91,12 +92,23 @@ type Postgres struct {
 }
 
 func main() {
+	cfg := Config{}
+	err := env.Parse(&cfg)
+	if err != nil {
+		panic(err)
+	}
+	if cfg.RPC.Addr != "localhost:9000" {
+		panic(err)
+	}
+	if cfg.Redis.Addr != "localhost:6379" {
+		panic(err)
+	}
+}
+
+func init() {
 	_ = os.Setenv("GRPC_ADDR", "localhost:9000")
 	_ = os.Setenv("RDS!ADDR", "localhost:6379")
 	_ = os.Setenv("RDS@PASSWORD", "123456")
 	_ = os.Setenv("RDS#DB", "10")
-	cfg := Config{}
-	_ = env.Parse(&cfg)
-	fmt.Println(cfg)
 }
 ```
